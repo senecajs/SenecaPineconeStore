@@ -1,3 +1,5 @@
+require('dotenv').config({ path: '.env' })
+
 const { Pinecone } = require('@pinecone-database/pinecone')
 
 async function runPinecone() {
