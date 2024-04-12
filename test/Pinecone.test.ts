@@ -22,6 +22,19 @@ describe('PineconeStore', () => {
     expect(seneca.export('PineconeStore/native')).toBeDefined()
   })
 
+  test('create-index', async () => {})
+
+  test('save-vectors', async () => {})
+
+  test('load-vectors', async () => {})
+
+  test('query-by-vector', async () => {})
+
+  test('list-vectors', async () => {})
+
+  test('remove-vectors', async () => {})
+
+  test('delete-index', async () => {})
 })
 
 function makeSeneca() {
@@ -35,9 +48,7 @@ function makeSeneca() {
       },
       pinecone: {
         apiKey: process.env.PINECONE_API_KEY,
-        index: process.env.SENECA_PINECONE_TEST_INDEX
+        index: process.env.SENECA_PINECONE_TEST_INDEX,
+      },
     })
 }
-
-
-
