@@ -1,5 +1,6 @@
 require('dotenv').config({ path: '.env' })
 
+// https://docs.pinecone.io/guides/getting-started/quickstart
 const { Pinecone } = require('@pinecone-database/pinecone')
 
 async function runPinecone() {
