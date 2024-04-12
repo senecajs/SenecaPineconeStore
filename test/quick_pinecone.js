@@ -13,13 +13,10 @@
 //       map: {
 //         'foo/chunk': '*',
 //       },
-//       index: {
-//         exact: process.env.SENECA_PINECONE_TEST_INDEX,
-//       },
 //       pinecone: {
 //         client_connection: new Pinecone({
-//           apikey: process.env.PINECONE_API_KEY,
-//         }).index(index.exact),
+//           apiKey: process.env.PINECONE_API_KEY,
+//         }).index(process.env.SENECA_PINECONE_TEST_INDEX),
 //       },
 //     })
 
