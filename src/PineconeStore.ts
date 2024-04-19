@@ -1,8 +1,6 @@
 /* Copyright (c) 2024 Seneca contributors, MIT License */
 
-import { AwsSigv4Signer } from '@opensearch-project/opensearch/aws'
-import { Client } from '@opensearch-project/opensearch'
-import { defaultProvider } from '@aws-sdk/credential-provider-node'
+const { Pinecone } = require('@pinecone-database/pinecone')
 
 import { Gubu } from 'gubu'
 
@@ -28,26 +26,27 @@ type Options = {
       size: number
     }
   }
-  aws: any
-  opensearch: any
+  pinecone: any
 }
 
-export type OpensearchStoreOptions = Partial<Options>
+export type PineconeStoreOptions = Partial<Options>
 
-function OpensearchStore(this: any, options: Options) {
+function PineconeStore(this: any, options: Options) {
   const seneca: any = this
 
   const init = seneca.export('entity/init')
 
-  let desc: any = 'OpensearchStore'
+  let desc: any = 'PineconeStore'
 
-  let client: any
+  let index: any
 
   let store = {
-    name: 'OpensearchStore',
+    name: 'PineconeStore',
 
-    save: function (this: any, msg: any, reply: any) {
-      // const seneca = this
+    // https://docs.pinecone.io/guides/data/upsert-data
+    save: async function (this: any, msg: any, reply: any) {
+      console.log('save()')
+
       const ent = msg.ent
 
       const canon = ent.canon$({ object: true })
@@ -68,8 +67,26 @@ function OpensearchStore(this: any, options: Options) {
         body,
       }
 
-      client
-        .index(req)
+      // await index.upsert([
+      //   {
+      //     id: 'vec1',
+      //     values: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+      //   },
+      //   {
+      //     id: 'vec2',
+      //     values: [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
+      //   },
+      //   {
+      //     id: 'vec3',
+      //     values: [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3],
+      //   },
+      //   {
+      //     id: 'vec4',
+      //     values: [0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+      //   },
+      // ])
+      await index
+        .upsert(req)
         .then((res: any) => {
           const body = res.body
           ent.data$(body._source)
@@ -79,21 +96,20 @@ function OpensearchStore(this: any, options: Options) {
         .catch((err: any) => reply(err))
     },
 
-    load: function (this: any, msg: any, reply: any) {
-      // const seneca = this
+    // https://docs.pinecone.io/guides/data/fetch-data
+    load: async function (this: any, msg: any, reply: any) {
+      console.log('load()')
+
       const ent = msg.ent
 
-      // const canon = ent.canon$({ object: true })
       const index = resolveIndex(ent, options)
 
       let q = msg.q || {}
 
       if (null != q.id) {
-        client
-          .get({
-            index,
-            id: q.id,
-          })
+        // await index.fetch(['vec3', 'vec4'])
+        await index
+          .fetch(q.id)
           .then((res: any) => {
             const body = res.body
             ent.data$(body._source)
@@ -113,22 +129,26 @@ function OpensearchStore(this: any, options: Options) {
       }
     },
 
-    list: function (msg: any, reply: any) {
-      // const seneca = this
+    // https://docs.pinecone.io/guides/data/query-data
+    query: async function (this: any, msg: any, reply: any) {
+      console.log('query()')
+
       const ent = msg.ent
 
       const index = resolveIndex(ent, options)
       const query = buildQuery({ index, options, msg })
 
-      // console.log('LISTQ')
-      // console.dir(query, { depth: null })
-
       if (null == query) {
         return reply([])
       }
 
-      client
-        .search(query)
+      // await index.query({
+      //   vector: [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3],
+      //   topK: 3,
+      //   includeValues: true,
+      // })
+      await index
+        .query(query)
         .then((res: any) => {
           const hits = res.body.hits
           const list = hits.hits.map((entry: any) => {
@@ -144,9 +164,36 @@ function OpensearchStore(this: any, options: Options) {
         })
     },
 
-    // NOTE: all$:true is REQUIRED for deleteByQuery
-    remove: function (this: any, msg: any, reply: any) {
-      // const seneca = this
+    // https://docs.pinecone.io/guides/data/list-record-ids
+    list: async function (msg: any, reply: any) {
+      console.log('list()')
+
+      const ent = msg.ent
+
+      const index = resolveIndex(ent, options)
+
+      await index
+        .list()
+        .then((res: any) => {
+          const body = res.body
+          ent.data$(body._source)
+          ent.id = body._id
+          reply(ent)
+        })
+        .catch((err: any) => {
+          // Not found
+          if (err.meta && 404 === err.meta.statusCode) {
+            reply(null)
+          }
+
+          reply(err)
+        })
+    },
+
+    // https://docs.pinecone.io/guides/data/delete-data
+    remove: async function (this: any, msg: any, reply: any) {
+      console.log('remove()')
+
       const ent = msg.ent
 
       const index = resolveIndex(ent, options)
@@ -163,16 +210,10 @@ function OpensearchStore(this: any, options: Options) {
         }
       }
 
-      // console.log('REMOVE', id)
-      // console.dir(query, { depth: null })
-
       if (null != id) {
-        client
-          .delete({
-            index,
-            id,
-            // refresh: true,
-          })
+        // await index.deleteMany(['vec1', 'vec2'])
+        await index
+          .deleteOne(id)
           .then((_res: any) => {
             reply(null)
           })
@@ -184,59 +225,28 @@ function OpensearchStore(this: any, options: Options) {
 
             reply(err)
           })
-      } else if (null != query && true === q.all$) {
-        client
-          .deleteByQuery({
-            index,
-            body: {
-              query,
-            },
-            // refresh: true,
-          })
-          .then((_res: any) => {
-            reply(null)
-          })
-          .catch((err: any) => {
-            // console.log('REM ERR', err)
-            reply(err)
-          })
-      } else {
-        reply(null)
       }
     },
 
-    close: function (this: any, _msg: any, reply: any) {
-      this.log.debug('close', desc)
-      reply()
-    },
+    // create_index:
+    // delete_index:
 
     // TODO: obsolete - remove from seneca entity
     native: function (this: any, _msg: any, reply: any) {
+      console.log('native()')
       reply(null, {
-        client: () => client,
+        index: () => index,
       })
     },
   }
-
   let meta = init(seneca, options, store)
 
   desc = meta.desc
 
   seneca.prepare(async function (this: any) {
-    const region = options.aws.region
-    const node = options.opensearch.node
-
-    client = new Client({
-      ...AwsSigv4Signer({
-        region,
-        service: 'aoss',
-        getCredentials: () => {
-          const credentialsProvider = defaultProvider()
-          return credentialsProvider()
-        },
-      }),
-      node,
-    })
+    index = new Pinecone({
+      apiKey: process.env.PINECONE_API_KEY,
+    }).index(process.env.SENECA_PINECONE_TEST_INDEX)
   })
 
   return {
@@ -244,7 +254,7 @@ function OpensearchStore(this: any, options: Options) {
     tag: meta.tag,
     exportmap: {
       native: () => {
-        return { client }
+        return { index }
       },
     },
   }
@@ -332,7 +342,6 @@ function resolveIndex(ent: any, options: Options) {
   return prefix + infix + suffix
 }
 
-// Default options.
 const defaults: Options = {
   debug: false,
   map: Any(),
@@ -343,7 +352,6 @@ const defaults: Options = {
     exact: '',
   },
 
-  // '' === name => do not inject
   field: {
     zone: { name: 'zone' },
     base: { name: 'base' },
@@ -357,22 +365,19 @@ const defaults: Options = {
     },
   },
 
-  aws: Open({
-    region: 'us-east-1',
-  }),
-
-  opensearch: Open({
-    node: 'NODE-URL',
+  pinecone: Open({
+    apiKey: process.env.PINECONE_API_KEY,
+    index: process.env.SENECA_PINECONE_TEST_INDEX,
   }),
 }
 
-Object.assign(OpensearchStore, {
+Object.assign(PineconeStore, {
   defaults,
   utils: { resolveIndex },
 })
 
-export default OpensearchStore
+export default PineconeStore
 
 if ('undefined' !== typeof module) {
-  module.exports = OpensearchStore
+  module.exports = PineconeStore
 }

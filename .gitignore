@@ -23,6 +23,6 @@ package-lock.json
 lcov.info
 test/coverage.html
 
-
+.env
 .env.local
 coverage/
